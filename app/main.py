@@ -48,5 +48,5 @@ app.include_router(vote.router)
 #Home page
 @app.get("/")
 def root():
-    return {"message": "This is your home page!"}
+    return {"message": "Hellow FastAPI!"}
 
