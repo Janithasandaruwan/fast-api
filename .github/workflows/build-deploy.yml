@@ -27,7 +27,8 @@ jobs:
         uses: actions/checkout@v2
       - name: Say hi to janitha
         run: echo "hellow janitha"
-      - name: Intsall python version 3.8
+      - name: Intsall python version 3.9
+        uses: actions/setup-python@v2
         with:
           python-version: "3.8"
       - name: Update pip
