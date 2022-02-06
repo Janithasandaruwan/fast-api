@@ -1,62 +1,7 @@
-from fastapi.testclient import TestClient
-from app.main import app
 from app import schemas
+from jose import jwt
 from app.config import settings
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.ext.declarative import declarative_base
-from app.database import get_db
-from app.database import Base
 import pytest
-from alembic import command
-
-#CREATE THE TEST DATABASE INSTEAD OF ORIGINAL DATABASE******************************************************************
-#SQLALCHEMY_DATABASE_URL = "postgresql://postgres:password123@localhost:5432/fastapi_test"
-SQLALCHEMY_DATABASE_URL = f"postgresql://{settings.database_username}:{settings.database_password}@{settings.database_hostname}/{settings.database_name}_test"
-
-# Establish the connection
-engine = create_engine(SQLALCHEMY_DATABASE_URL)
-
-# Talk to the sql database
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# When we get a request, it create session to send sql statements. After request is done, then it close it
-# def overeide_get_db():
-#     db = TestingSessionLocal()
-#     try:
-#         yield db
-#     finally:
-#         db.close()
-#
-# app.dependency_overrides[get_db] = overeide_get_db
-#***********************************************************************************************************************
-
-@pytest.fixture
-def session():
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-@pytest.fixture
-def client(session):
-    # Run our code before we return our test
-    #command.downgrade("base")
-    #command.upgrade("head")
-    def overeide_get_db():
-        try:
-            yield session
-        finally:
-            session.close()
-
-    app.dependency_overrides[get_db] = overeide_get_db
-    yield TestClient(app)
-    # Run our code after our test finishes
-
-
 
 def test_root(client):
     res = client.get("/")
@@ -70,3 +15,24 @@ def test_create_user(client):
     new_user = schemas.UserOut(**res.json())
     assert new_user.email == "janitha@gmail.com"
     assert res.status_code == 201
+
+def test_login_user(client, test_user):
+    res = client.post("/login", data={"username": test_user['email'], "password": test_user['password']})
+    login_res = schemas.Token(**res.json())
+    payload = jwt.decode(login_res.access_token, settings.secret_key, algorithms=[settings.algorithm])
+    id = payload.get("user_id")
+
+    assert id == test_user['id']
+    assert login_res.token_type == "bearer"
+    assert res.status_code == 200
+
+@pytest.mark.parametrize("email, password, status_code", [
+    ('jsjweerasinghe1@gmail.com', '1234', 403),
+    ('jsjweerasinghe2@gmail.com', '1234', 403),
+])
+def test_incorrect_login(test_user, client, email, password, status_code):
+    #res = client.post("/login", data={"username": test_user['email'], "password": "wrong pwd"})
+    res = client.post("/login", data={"username": email, "password": password})
+
+    assert res.status_code == status_code
+    assert res.json().get('detail') == "Invalid Credentials"
